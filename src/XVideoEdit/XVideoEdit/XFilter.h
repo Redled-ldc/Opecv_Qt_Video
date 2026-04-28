@@ -19,6 +19,10 @@ enum XTaskType
 	//图像金字塔调整
 	XTASK_PYRDOWN,
 	XTASK_PYRUP,
+	//视频裁剪
+	XTASK_CLIP,
+	//转为灰度图
+	XTASK_GRAY,
 };
 struct XTask
 { 

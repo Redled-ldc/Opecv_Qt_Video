@@ -73,6 +73,21 @@ void XImagePro::PyrUp(int count)
 		cv::pyrUp(des, des);
 	}
 }
+//视频裁剪
+void XImagePro::Clip(int x, int y, int width, int height)
+{
+	if (des.empty()) return;
+	if (x < 0 || y<0 || width <= 0 || height <= 0 || x + width>des.cols || y + height > des.rows) return;
+	cv::Rect roi(x, y, width, height);
+	des = des(roi);
+}
+//转为灰度图
+void XImagePro::Gray()
+{
+	if (des.empty()) return;
+	cv::cvtColor(des, des, cv::COLOR_BGR2GRAY);
+}
+
 XImagePro::XImagePro()
 {
 }

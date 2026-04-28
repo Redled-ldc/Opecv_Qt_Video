@@ -30,7 +30,11 @@ class XImagePro
 		void PyrUp(int count);//拉普拉斯金字塔
 
 		// 视频裁剪
-		void Crop(int x, int y, int width, int height);
+		void Clip(int x, int y, int width, int height);
+
+		//图像颜色调整
+		void Gray();//转为灰度图
+		//void Color(int r, int g, int b);
 
 		XImagePro();
         ~XImagePro();

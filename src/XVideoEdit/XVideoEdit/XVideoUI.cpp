@@ -5,6 +5,7 @@
 #include "XFilter.h"
 static bool pressSlider = false;
 static bool isExport = false;
+static bool isColor = true;
 XVideoUI::XVideoUI(QWidget *parent)
     : QWidget(parent)
 {
@@ -96,6 +97,7 @@ void XVideoUI::SliderRelease()
 void XVideoUI::SetParam()
 {
 	XFilter::Get()->Clear();
+	isColor = true;
 	//设置对比度和亮度
 	if (ui.bright->value() >= 0 || ui.contrast->value() > 1)
 	{
@@ -107,6 +109,12 @@ void XVideoUI::SetParam()
 	else
 	{
 		QMessageBox::warning(this, tr("参数错误"), tr("亮度必须大于0，对比度必须大于1！"));
+	}
+	//颜色调整
+	if (ui.color->currentIndex() == 1)
+	{
+		XFilter::Get()->Add(XTask{ XTASK_GRAY });
+		isColor = false;
 	}
 	//设置旋转1:90;2:180;3:270
 	if (ui.rotateBox->currentIndex()==1)
@@ -133,6 +141,21 @@ void XVideoUI::SetParam()
 	else if (ui.flipBox->currentIndex() == 3)
 	{
 		XFilter::Get()->Add(XTask{ XTASK_FLIPXY });
+	}
+
+	//设置视频裁剪
+	bool isClip = false;
+	double x = ui.clipx->value();
+	double y = ui.clipy->value();
+	double w = ui.clipw->value();
+	double h = ui.cliph->value();
+	if (x + y + w + h > 0.0001)
+	{
+		isClip = true;
+		XFilter::Get()->Add(XTask{ XTASK_CLIP, { x,y,w,h } });
+		double cw = XVideoThread::Get()->width;
+		double ch = XVideoThread::Get()->height;
+		XFilter::Get()->Add(XTask{ XTASK_RESIZE, { cw,ch } });
 	}
 
 	//图像金字塔
@@ -168,23 +191,22 @@ void XVideoUI::SetParam()
 		ui.height->setValue(h);
 	}
 	//设置尺寸调整
-	double w = ui.width->value();
-	double h = ui.height->value();
-	if (!isPy&&w> 0 && h > 0)
+	double rw = ui.width->value();
+	double rh = ui.height->value();
+	if (!isClip&&!isPy&&rw> 0.0001 && rh > 0.0001)
 	{
-		XFilter::Get()->Add(XTask{ XTASK_RESIZE, { w, h } });
+		XFilter::Get()->Add(XTask{ XTASK_RESIZE, { rw, rh } });
 	}
-	if (w > 0 && h > 0)
+	if (rw > 0 && rh > 0)
 	{
 		int srcW = XVideoThread::Get()->width;
 		int srcH = XVideoThread::Get()->height;
-		if (w != srcW || h != srcH)
+		if (rw != srcW || rh != srcH)
 		{
-			XFilter::Get()->Add(XTask{ XTASK_RESIZE, { w, h } });
+			XFilter::Get()->Add(XTask{ XTASK_RESIZE, { rw, rh } });
 		}
 	}
 	
-
 }
 void XVideoUI::ExportVideo()
 {
@@ -204,7 +226,7 @@ void XVideoUI::ExportVideo()
 	}
 	int w = ui.width->value();
 	int h = ui.height->value();
-	if (XVideoThread::Get()->StartSave(fileName.toStdString(),w,h))
+	if (XVideoThread::Get()->StartSave(fileName.toStdString(),w,h,isColor))
 	{
 		isExport = true;
 		ui.exportButton->setText(tr("Stop Export"));

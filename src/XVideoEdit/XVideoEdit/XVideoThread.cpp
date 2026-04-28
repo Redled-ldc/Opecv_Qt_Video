@@ -165,7 +165,7 @@ bool XVideoThread::Open(const std::string file)
     return re;
 }
 
-bool XVideoThread::StartSave(const std::string filename, int width, int height)
+bool XVideoThread::StartSave(const std::string filename, int width, int height,bool isColor)
 {
 	// 这里可以实现视频保存功能，使用OpenCV的VideoWriter
 	// 注意：需要确保线程安全，可能需要额外的成员变量来管理VideoWriter对象
@@ -189,7 +189,7 @@ bool XVideoThread::StartSave(const std::string filename, int width, int height)
     int fourcc = VideoWriter::fourcc('H', '2', '6', '4');
     vw.open(filename, fourcc,
         this->fps,
-        Size(width, height));
+        Size(width, height),isColor);
 	if (!vw.isOpened())
 	{
         qCritical() << "视频导出失败";

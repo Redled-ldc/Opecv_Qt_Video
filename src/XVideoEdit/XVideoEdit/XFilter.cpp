@@ -61,6 +61,14 @@ public:
 					//图像金字塔上采样
 					p.PyrUp(task.param[0]);
 					break;
+				case XTASK_CLIP:
+					//视频裁剪
+					p.Clip(static_cast<int>(task.param[0]), static_cast<int>(task.param[1]), static_cast<int>(task.param[2]), static_cast<int>(task.param[3]));
+					break;
+				case XTASK_GRAY:
+					//转为灰度图
+					p.Gray();
+					break;
 				default:
 					break;
 				}

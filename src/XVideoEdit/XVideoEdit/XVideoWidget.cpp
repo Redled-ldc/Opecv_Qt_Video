@@ -20,32 +20,40 @@ void XVideoWidget::paintEvent(QPaintEvent* event)
 
 void XVideoWidget::SetImage(cv::Mat mat)
 {
-	/*if (img.isNull())
-	{
-		uchar* buf = new uchar[width() * height() * 3];
-		img = QImage(buf, width(), height(), QImage::Format_RGB888);
-	}
-	cv::Mat des;
-	cv::resize(mat, des, cv::Size(img.size().width(),img.size().height()));
-	memcpy(img.bits(), des.data, (des.rows * des.cols * des.elemSize()));
-	*/
-	if (mat.empty()) return;
+    if (mat.empty()) return;
 
-	// 1. 转换OpenCV BGR → RGB
-	cv::Mat rgbMat;
-	cv::cvtColor(mat, rgbMat, cv::COLOR_BGR2RGB);
+    cv::Mat desMat;
+    QImage::Format fmt;
 
-	// 2. 调整尺寸为控件当前尺寸（避免尺寸为0）
-	cv::Size targetSize(width(), height());
-	if (targetSize.width <= 0 || targetSize.height <= 0) return;
-	cv::resize(rgbMat, rgbMat, targetSize);
+    // 根据通道数处理
+    if (mat.channels() == 1) {                    // 灰度图
+        desMat = mat.clone();
+        fmt = QImage::Format_Grayscale8;
+    }
+    else if (mat.channels() == 3) {               // BGR
+        cv::cvtColor(mat, desMat, cv::COLOR_BGR2RGB);
+        fmt = QImage::Format_RGB888;
+    }
+    else if (mat.channels() == 4) {               // BGRA
+        cv::cvtColor(mat, desMat, cv::COLOR_BGRA2RGBA);
+        fmt = QImage::Format_RGBA8888;            // 保留 Alpha
+        // 若不需要 Alpha 可转为 RGB:
+        // cv::cvtColor(mat, desMat, cv::COLOR_BGRA2RGB);
+        // fmt = QImage::Format_RGB888;
+    }
+    else {
+        return; // 不支持的格式
+    }
 
-	// 3. 重新初始化QImage（避免手动分配内存泄漏）
-	// 直接用Mat数据创建QImage，利用Qt内存管理
-	img = QImage(rgbMat.data, rgbMat.cols, rgbMat.rows,
-		rgbMat.step1(), QImage::Format_RGB888);
-	// 深拷贝Mat数据（避免Mat释放后QImage数据失效）
-	img = img.copy();
+    // 调整尺寸为控件大小
+    cv::Size targetSize(width(), height());
+    if (targetSize.width <= 0 || targetSize.height <= 0) return;
+    cv::resize(desMat, desMat, targetSize);
 
-	update();
+    // 创建 QImage 并深拷贝
+    img = QImage(desMat.data, desMat.cols, desMat.rows,
+        desMat.step1(), fmt);
+    img = img.copy();  // 深拷贝，避免 Mat 释放后数据失效
+
+    update();
 }
