@@ -3,9 +3,18 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include "XFilter.h"
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/videoio.hpp>
+#include <iostream>
+#include "XAudio.h"
+#include <QFile>
 static bool pressSlider = false;
 static bool isExport = false;
 static bool isColor = true;
+static bool isMark = false;
+static bool isBlend = false;
+static bool isMegre = false;
+
 XVideoUI::XVideoUI(QWidget *parent)
     : QWidget(parent)
 {
@@ -23,12 +32,19 @@ XVideoUI::XVideoUI(QWidget *parent)
 	connect(XVideoThread::Get(), &XVideoThread::SaveEend, this, &XVideoUI::ExportEnd);
 	connect(ui.playButton, &QPushButton::clicked, this, &XVideoUI::PlayVideo);
 	connect(ui.pauseButton, &QPushButton::clicked, this, &XVideoUI::PauseVideo);
+	connect(ui.blendButton, &QPushButton::clicked, this, &XVideoUI::Blend);
+	connect(ui.markButton, &QPushButton::clicked, this, &XVideoUI::SetMark);
+	connect(ui.mergeButton, &QPushButton::clicked, this, &XVideoUI::Merge);
+	connect(ui.endplay, &QSlider::sliderMoved, this, &XVideoUI::CutRight);
+	connect(ui.startplay, &QSlider::sliderMoved, this, &XVideoUI::CutLeft);
 	qRegisterMetaType<cv::Mat>("cv::Mat");
 
 	//原1视频显示信号和槽连接
 	connect(XVideoThread::Get(), &XVideoThread::ViewImage1,
 		ui.src1video, &XVideoWidget::SetImage);
-
+	//原2视频显示信号和槽连接
+	connect(XVideoThread::Get(), &XVideoThread::ViewImage2,
+		ui.src2video, &XVideoWidget::SetImage);
 	//输出视频显示信号和槽连接
 	connect(XVideoThread::Get(), &XVideoThread::ViewDes,
 		ui.desvideo, &XVideoWidget::SetImage);
@@ -80,6 +96,17 @@ void XVideoUI::openFile()
 	}
 	PlayVideo();
 }
+//视频剪切左端点
+void XVideoUI::CutLeft(int pos)
+{
+	XVideoThread::Get()->SetBegin((double)pos / 1000.0);
+	SetPos(pos);
+}
+//视频剪切右端点
+void XVideoUI::CutRight(int pos)
+{
+	XVideoThread::Get()->SetEnd((double)pos / 1000.0);
+}
 //滑动条改变，改变播放位置
 void XVideoUI::SetPos(int pos)
 {
@@ -93,6 +120,53 @@ void XVideoUI::SliderPress()
 void XVideoUI::SliderRelease()
 {
 	pressSlider = false;
+}
+//视频合并
+void XVideoUI::Merge()
+{
+	isMark = false;
+	isBlend = false;
+	isMegre = false;
+	QString fileName = QFileDialog::getOpenFileName(this, tr("选择融合视频文件"), "", tr("Video Files (*.mp4 *.avi *.mkv)"));
+	if (fileName.isEmpty()) {
+		return;
+	}
+	isMegre=XVideoThread::Get()->Open2(fileName.toStdString());
+}
+//视频融合
+void XVideoUI::Blend() {
+	
+	isMark = false;
+	isBlend = false;
+	isMegre = false;
+	QString fileName = QFileDialog::getOpenFileName(this, tr("选择融合视频文件"), "", tr("Video Files (*.mp4 *.avi *.mkv)"));
+	if (fileName.isEmpty()) {
+		return;
+	}
+
+	isBlend=XVideoThread::Get()->Open2(fileName.toStdString());
+	//std::cout << isBlend << std::endl;
+
+}
+//设置水印
+void XVideoUI::SetMark()
+{
+	isMark = false;
+	isBlend = false;
+	isMegre = false;
+	QString fileName = QFileDialog::getOpenFileName(this, tr("选择水印图片"), "", tr("Image Files (*.png *.jpg *.bmp)"));
+	if (fileName.isEmpty()) {
+		
+		return;
+	}
+	cv::Mat mark = cv::imread(fileName.toStdString(), cv::IMREAD_UNCHANGED);
+	if (mark.empty())
+	{
+		QMessageBox::critical(this, tr("错误"), tr("无法打开水印图片！"));
+		return;
+	}
+	XVideoThread::Get()->SetMark(mark);
+	isMark = true;
 }
 void XVideoUI::SetParam()
 {
@@ -193,7 +267,7 @@ void XVideoUI::SetParam()
 	//设置尺寸调整
 	double rw = ui.width->value();
 	double rh = ui.height->value();
-	if (!isClip&&!isPy&&rw> 0.0001 && rh > 0.0001)
+	if (!isMegre&&!isClip&&!isPy&&rw> 0.0001 && rh > 0.0001)
 	{
 		XFilter::Get()->Add(XTask{ XTASK_RESIZE, { rw, rh } });
 	}
@@ -206,7 +280,30 @@ void XVideoUI::SetParam()
 			XFilter::Get()->Add(XTask{ XTASK_RESIZE, { rw, rh } });
 		}
 	}
-	
+	//设置水印
+	if (isMark)
+	{
+		double mx = ui.mx->value();
+		double my = ui.my->value();
+		double alpha = ui.malph->value();
+		XFilter::Get()->Add(XTask{ XTASK_MARK,{mx,my,alpha} });
+	}
+	//融合
+	if (isBlend)
+	{
+		double alpha = ui.balph->value();
+		XFilter::Get()->Add(XTask{ XTASK_BLEND,{alpha} });
+	}
+	//合并
+	if (isMegre)
+	{
+		double h2 = XVideoThread::Get()->height2;
+		double h1 = XVideoThread::Get()->height;
+		double w2 = XVideoThread::Get()->width2 * (h2 / h1);
+		XFilter::Get()->Add(XTask{ XTASK_MERGE });
+		ui.width->setValue(XVideoThread::Get()->width+w2);
+		ui.height->setValue(h1);
+	}
 }
 void XVideoUI::ExportVideo()
 {
@@ -238,8 +335,27 @@ void XVideoUI::ExportEnd()
 {
 	isExport = false;
 	ui.exportButton->setText(tr("Start Export"));
+	std::string srcfile = XVideoThread::Get()->src1file;
+	std::string desfile = XVideoThread::Get()->desfile;
+	//处理音频
+	int ss = 0;
+	int t = 0;
+	ss=XVideoThread::Get()->totalMs*((double)ui.startplay->value()/1000.0);
+	int end = XVideoThread::Get()->totalMs * ((double)ui.endplay->value() / 1000.0);
+	if (end - ss < 1000)
+	{
+		t = 1000;
+	}
+	else
+	{
+		t = end - ss;
+	}
+	XAudio::Get().ExportA(srcfile,srcfile+".mp3",ss,t);
+	std::string tmp = desfile+".mp4";
+	QFile::remove(tmp.c_str());
+	QFile::rename(desfile.c_str(), tmp.c_str());
+	XAudio::Get().Merge(tmp, srcfile + ".mp3", desfile);
 }
-
 //播放视频
 void XVideoUI::PlayVideo()
 {

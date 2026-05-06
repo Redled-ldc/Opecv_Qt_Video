@@ -36,6 +36,14 @@ class XImagePro
 		void Gray();//转为灰度图
 		//void Color(int r, int g, int b);
 
+		//水印
+		void Mark( int x, int y, double alpha);
+
+		//视频融合
+		void Blend(double alpha);
+		
+		//视频合并
+		void Merge();
 		XImagePro();
         ~XImagePro();
   private:

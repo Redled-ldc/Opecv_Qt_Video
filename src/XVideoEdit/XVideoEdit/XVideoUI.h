@@ -34,5 +34,15 @@ public slots:
 	void PlayVideo();
 	//视频暂停
 	void PauseVideo();
+	//设置水印
+	void SetMark();
+    //视频融合
+	void Blend();
+    //视频合并
+	void Merge();
+    //视频剪切左端点
+	void CutLeft(int pos);
+	//视频剪切右端点
+	void CutRight(int pos);
 };
 

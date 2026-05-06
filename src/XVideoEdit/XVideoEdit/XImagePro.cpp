@@ -50,6 +50,57 @@ void XImagePro::FlipXY()
 	if (des.empty()) return;
 	cv::flip(des, des, -1);
 }
+//视频合并
+void XImagePro::Merge()
+{
+	if (des.empty() || src2.empty()) return;
+	if (src2.size() != des.size())
+	{
+		int w = src2.cols * ((double)src2.rows / (double)des.rows);
+
+		cv::resize(src2, src2, cv::Size(w,des.rows));
+	}
+	//水平拼接
+	/*int dw = des.cols + src2.cols;
+	int dh = des.rows;
+	des = cv::Mat(cv::Size(dw, dh),src1.type());
+	cv::Mat r1 = des(cv::Rect(0, 0, src1.cols, dh));
+	cv::Mat r2 = des(cv::Rect(src1.cols, 0, src2.cols, dh));
+	src1.copyTo(r1);
+	src2.copyTo(r2);
+	*/
+	cv::hconcat(des, src2, des);
+}
+//视频融合
+void XImagePro::Blend(double alpha)
+{
+	if (des.empty() || src2.empty()) return;
+	if(src2.size()!=des.size())
+	{
+		cv::resize(src2, src2, des.size());
+	}
+	cv::addWeighted(src2, alpha, des, 1 - alpha, 0, des);
+}
+//水印
+void XImagePro::Mark(int x, int y, double alpha)
+{
+	if (des.empty() || src2.empty()) return;
+	if (x < 0 || y < 0 ) return;
+	int maxW = des.cols - x;
+	int maxH = des.rows - y;
+	if (maxW <= 0 || maxH <= 0) return;
+	cv::Mat watermark = src2;
+	if (watermark.cols > maxW || watermark.rows > maxH)
+	{
+		double scaleX = (double)maxW / watermark.cols;
+		double scaleY = (double)maxH / watermark.rows;
+		double scale = std::min(scaleX, scaleY);
+		cv::resize(watermark, watermark, cv::Size(), scale, scale);
+	}
+	cv::Mat roi = des(cv::Rect(x, y, watermark.cols, watermark.rows));
+	cv::addWeighted(roi, 1 - alpha, watermark, alpha, 0, roi);
+}
+
 //图像尺寸调整
 void XImagePro::Resize(int width, int height)
 {

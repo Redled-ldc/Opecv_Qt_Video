@@ -23,6 +23,12 @@ enum XTaskType
 	XTASK_CLIP,
 	//转为灰度图
 	XTASK_GRAY,
+	//水印
+	XTASK_MARK,
+	//视频融合
+	XTASK_BLEND,
+	//视频水平合并
+	XTASK_MERGE,
 };
 struct XTask
 { 

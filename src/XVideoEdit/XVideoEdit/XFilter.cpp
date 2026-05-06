@@ -69,6 +69,18 @@ public:
 					//转为灰度图
 					p.Gray();
 					break;
+				case XTASK_MARK:
+					//水印
+					p.Mark(static_cast<int>(task.param[0]), static_cast<int>(task.param[1]), task.param[2]);
+					break;
+				case XTASK_BLEND:
+					//视频融合
+					p.Blend(task.param[0]);
+					break;
+				case XTASK_MERGE:
+					//视频水平合并
+					p.Merge();
+					break;
 				default:
 					break;
 				}

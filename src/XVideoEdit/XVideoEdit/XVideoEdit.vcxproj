@@ -103,6 +103,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="XAudio.cpp" />
     <ClCompile Include="XFilter.cpp" />
     <ClCompile Include="XImagePro.cpp" />
     <ClCompile Include="XVideoThread.cpp" />
@@ -118,6 +119,7 @@
     <QtMoc Include="XVideoWidget.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="XAudio.h" />
     <ClInclude Include="XFilter.h" />
     <ClInclude Include="XImagePro.h" />
   </ItemGroup>

@@ -9,6 +9,8 @@ using namespace cv;
 #include <QMessageBox>
 //1号视频源
 static VideoCapture cap1;
+//2号视频源
+static VideoCapture cap2;
 //保存视频
 static VideoWriter vw;
 
@@ -28,10 +30,23 @@ XVideoThread::~XVideoThread()
     if (vw.isOpened())  vw.release();
 }
 
+void XVideoThread::SetBegin(double p) {
+    QMutexLocker locker(&mutex);
+    double totalFrames = cap1.get(CAP_PROP_FRAME_COUNT);
+    int frame = (int)(p * totalFrames);
+	begin = frame;
+}
+void XVideoThread::SetEnd(double p) {
+    QMutexLocker locker(&mutex);
+    double totalFrames = cap1.get(CAP_PROP_FRAME_COUNT);
+    int frame = (int)(p * totalFrames);
+    end = frame;
+}
+
 bool XVideoThread::Seek(double pos)
 { 
     double totalFrames = cap1.get(CAP_PROP_FRAME_COUNT);
-    int frame= (int)pos*totalFrames;
+    int frame= (int)(pos*totalFrames);
 	return Seek(frame);
 }
 //Seek()函数,跳转视频
@@ -43,7 +58,10 @@ bool XVideoThread::Seek(int pos)
         locker.unlock();
         return false;
     }
+
 	int re = cap1.set(CAP_PROP_POS_FRAMES, pos);
+	if (cap2.isOpened())
+	    cap2.set(CAP_PROP_POS_FRAMES, pos);
 	locker.unlock();
    return re;
 }
@@ -79,16 +97,19 @@ void XVideoThread::run()
             msleep(6);
             continue;
         }
-        if (!isPlay)
+        if (!isPlay&&!isWrite)
         {
             locker.unlock();
 			msleep(6);
             continue;
         }
+		int currentFrame = static_cast<int>(cap1.get(CAP_PROP_POS_FRAMES));
 		bool readSuccess = cap1.read(mat1);
         locker.unlock();
-        if (!readSuccess || mat1.empty()) {
+        if ((end>0&&currentFrame>=end)||!readSuccess || mat1.empty()) {
             // 【必须加锁】判断 isWrite 并执行 StopSave
+             // 预览状态下停止播放
+            if (!isWrite) isPlay = false;
             bool needStop = false;
             {
                 QMutexLocker locker(&mutex);
@@ -107,13 +128,29 @@ void XVideoThread::run()
                 msleep(5);
                 continue;
         }
+        //处理视频
+        Mat mat2 = this->mark;
+
+        if (cap2.isOpened())
+        {
+            QMutexLocker locker(&mutex);
+            cv::Mat matTemp;
+            bool readSuccess2 = cap2.read(matTemp);
+            locker.unlock();
+            if (readSuccess2 && !matTemp.empty())
+            {
+                mat2 = matTemp;
+            }
+        }
 
         // 发送原视频信号（注意：Qt跨线程信号需确保类型注册成功）
-        if(!isWrite)
-            emit ViewImage1(mat1.clone()); // 克隆Mat，避免线程间数据竞争
 
-        //处理视频
-		Mat des=XFilter::Get()->Filter(mat1, Mat());
+            emit ViewImage1(mat1.clone()); // 克隆Mat，避免线程间数据竞争,视频源1
+			if (!mat2.empty())
+			    emit ViewImage2(mat2.clone()); // 克隆Mat，避免线程间数据竞争,视频源2
+        
+
+		Mat des=XFilter::Get()->Filter(mat1, mat2);
 
         // 发送生成视频信号（注意：Qt跨线程信号需确保类型注册成功）
        //if (isWrite)
@@ -140,12 +177,15 @@ bool XVideoThread::Open(const std::string file)
 {
 
     // 自动加锁：仅保护后续对cap1的读写操作
+    Seek(0);
     QMutexLocker locker(&mutex);
     // 先释放原有视频源
     if (cap1.isOpened()) {
         cap1.release();
     }
+  
     bool re = cap1.open(file);
+ 
     std::cout << "open video file " << file << " " << re << std::endl;
     if (!re)
     {
@@ -162,7 +202,34 @@ bool XVideoThread::Open(const std::string file)
     {
         fps = 25;
     }
+	src1file = file;
+	totalMs = (int)(cap1.get(CAP_PROP_FRAME_COUNT) / fps * 1000);
     return re;
+}
+bool XVideoThread::Open2(const std::string file)
+{
+    Seek(0);
+	// 这里可以实现打开第二个视频源的功能，类似于Open函数
+	// 注意：需要确保线程安全，可能需要额外的成员变量来管理第二个VideoCapture对象
+	QMutexLocker locker(&mutex);
+	if (cap2.isOpened()) {
+		cap2.release();
+	}
+    
+	bool re = cap2.open(file);
+	std::cout << "open second video file " << file << " " << re << std::endl;
+	if (!re)
+	{
+		return re;
+	}
+    //获取fps
+
+    //fps = cap2.get(CAP_PROP_FPS);
+    //获取视频宽
+    this->width2 = cap2.get(CAP_PROP_FRAME_WIDTH);
+    //获取视频高
+    this->height2 = cap2.get(CAP_PROP_FRAME_HEIGHT);
+	return re; // 返回是否成功打开第二个视频源
 }
 
 bool XVideoThread::StartSave(const std::string filename, int width, int height,bool isColor)
@@ -171,7 +238,7 @@ bool XVideoThread::StartSave(const std::string filename, int width, int height,b
 	// 注意：需要确保线程安全，可能需要额外的成员变量来管理VideoWriter对象
     
 	std::cout << "开始导出视频 " << filename << std::endl;
-    Seek(0);
+    Seek(begin);
 	if (!cap1.isOpened())
 	{
         qCritical() << "视频未打开，无法导出";
@@ -196,6 +263,7 @@ bool XVideoThread::StartSave(const std::string filename, int width, int height,b
         return false;
 	}
     this->isWrite = true;
+    desfile = filename;
 	return true; // 返回是否成功开始保存
 }
 
